@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<!-- SortableJS from CDN — lightweight, no build step needed -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
+<style>
+  :root {
+    --primary: #1a3a6e;
+    --bg: #ffffff;
+    --sec-bg: #f0f2f6;
+    --text: #31333f;
+    --border: #e0e0e0;
+    --card-bg: #ffffff;
+    --card-hover-bg: #f8fafd;
+    --card-active-bg: #e8f0fe;
+    --shadow: rgba(0, 0, 0, 0.05);
+    --connector-color: #cbd5e1;
+    --connector-active: #1a3a6e;
+  }
+  
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: 'Source Sans Pro', 'Segoe UI', 'Inter', sans-serif;
+    background: transparent;
+    overflow: hidden;
+    color: var(--text);
+  }
+  
+  .mapping-board {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 8px 4px;
+  }
+  
+  .column-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .panel-header {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    color: var(--text);
+    opacity: 0.6;
+    margin-bottom: 8px;
+    padding-left: 4px;
+  }
+  
+  .card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .column-card {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 1px 3px var(--shadow);
+    font-size: 13.5px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+  
+  /* Sheet A specific */
+  .column-card.static-card {
+    border-left: 4px solid var(--primary);
+  }
+  
+  /* Sheet B specific (draggable) */
+  .column-card.draggable-card {
+    cursor: grab;
+    border-right: 4px solid var(--primary);
+  }
+  .column-card.draggable-card:active {
+    cursor: grabbing;
+  }
+  
+  /* Hover effects */
+  .column-card:hover {
+    background: var(--card-hover-bg);
+    border-color: var(--primary);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px var(--shadow);
+  }
+  
+  /* Highlight matching row when hovered */
+  .row-hovered {
+    background: var(--card-active-bg) !important;
+    border-color: var(--primary) !important;
+  }
+  
+  /* Sortable chosen & ghost classes */
+  .sortable-ghost {
+    opacity: 0.4;
+    border: 2px dashed var(--primary) !important;
+    background: var(--sec-bg) !important;
+  }
+  
+  .sortable-chosen {
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
+    transform: scale(1.01);
+  }
+  
+  .drag-handle {
+    font-size: 16px;
+    color: var(--text);
+    opacity: 0.4;
+    cursor: grab;
+    padding-left: 8px;
+    user-select: none;
+  }
+  
+  /* Arrow/Connector Column */
+  .connector-panel {
+    width: 60px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 22px; /* Aligns with cards (excluding header) */
+  }
+  
+  .connector-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+  
+  .connector-item {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .connector-arrow {
+    width: 100%;
+    height: 2px;
+    background: var(--connector-color);
+    position: relative;
+    transition: all 0.15s ease;
+  }
+  
+  .connector-arrow::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: -4px;
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 6px solid var(--connector-color);
+    transition: all 0.15s ease;
+  }
+  
+  .connector-arrow.highlighted {
+    background: var(--connector-active);
+  }
+  .connector-arrow.highlighted::after {
+    border-left-color: var(--connector-active);
+  }
+  
+  .card-content {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+</style>
+</head>
+<body>
+
+<div class="mapping-board">
+  <!-- Left Side: Sheet A Columns -->
+  <div class="column-panel">
+    <div class="panel-header" id="hdr-a">Sheet A Columns</div>
+    <div class="card-list" id="list-a"></div>
+  </div>
+  
+  <!-- Middle: Connectors -->
+  <div class="connector-panel">
+    <div class="connector-list" id="list-connectors"></div>
+  </div>
+  
+  <!-- Right Side: Sheet B Columns (Draggable) -->
+  <div class="column-panel">
+    <div class="panel-header" id="hdr-b">Sheet B Columns (Drag to Match)</div>
+    <div class="card-list" id="list-b"></div>
+  </div>
+</div>
+
+<script>
+  let itemsA = [];
+  let itemsB = [];
+  let sortableInst = null;
+  let themeApplied = false;
+  
+  function toParent(msg) { window.parent.postMessage(msg, "*"); }
+  function setComponentValue(val) { toParent({ type: "streamlit:setComponentValue", value: val }); }
+  function setHeight() {
+    const h = document.documentElement.scrollHeight || document.body.scrollHeight;
+    toParent({ type: "streamlit:setFrameHeight", height: h + 16 });
+  }
+  
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  
+  function render(args) {
+    itemsA = args.items_a || [];
+    itemsB = args.items_b || [];
+    const nameA = args.name_a || "Sheet A";
+    const nameB = args.name_b || "Sheet B";
+    
+    document.getElementById("hdr-a").textContent = esc(nameA);
+    document.getElementById("hdr-b").textContent = esc(nameB) + " (Drag to Map)";
+    
+    const listA = document.getElementById("list-a");
+    const listB = document.getElementById("list-b");
+    const listConnectors = document.getElementById("list-connectors");
+    
+    listA.innerHTML = "";
+    listB.innerHTML = "";
+    listConnectors.innerHTML = "";
+    
+    const len = Math.max(itemsA.length, itemsB.length);
+    
+    for (let i = 0; i < len; i++) {
+      // 1. Sheet A card (static)
+      const cardA = document.createElement("div");
+      cardA.className = "column-card static-card";
+      cardA.innerHTML = `<span class="card-content" title="${esc(itemsA[i] || '')}">${esc(itemsA[i] || '')}</span>`;
+      listA.appendChild(cardA);
+      
+      // 2. Connector
+      const conn = document.createElement("div");
+      conn.className = "connector-item";
+      conn.innerHTML = `<div class="connector-arrow" id="arrow-${i}"></div>`;
+      listConnectors.appendChild(conn);
+      
+      // 3. Sheet B card (draggable)
+      const cardB = document.createElement("div");
+      cardB.className = "column-card draggable-card";
+      cardB.innerHTML = `
+        <span class="card-content" title="${esc(itemsB[i] || '')}">${esc(itemsB[i] || '')}</span>
+        <span class="drag-handle">⠿</span>
+      `;
+      listB.appendChild(cardB);
+    }
+    
+    if (sortableInst) {
+      sortableInst.destroy();
+      sortableInst = null;
+    }
+    
+    if (itemsB.length > 0) {
+      sortableInst = Sortable.create(listB, {
+        animation: 180,
+        handle: ".drag-handle",
+        ghostClass: "sortable-ghost",
+        chosenClass: "sortable-chosen",
+        onEnd: onDragEnd
+      });
+    }
+    
+    setTimeout(setHeight, 100);
+  }
+  
+  function highlightRow(idx, active) {
+    const listA = document.getElementById("list-a");
+    const listB = document.getElementById("list-b");
+    
+    const cardA = listA.children[idx];
+    const cardB = listB.children[idx];
+    const arrow = document.getElementById(`arrow-${idx}`);
+    
+    if (active) {
+      if (cardA) cardA.classList.add("row-hovered");
+      if (cardB) cardB.classList.add("row-hovered");
+      if (arrow) arrow.classList.add("highlighted");
+    } else {
+      if (cardA) cardA.classList.remove("row-hovered");
+      if (cardB) cardB.classList.remove("row-hovered");
+      if (arrow) arrow.classList.remove("highlighted");
+    }
+  }
+  
+  function onDragEnd() {
+    const listB = document.getElementById("list-b");
+    const cards = listB.querySelectorAll(".column-card");
+    const newB = [];
+    cards.forEach((card) => {
+      const text = card.querySelector(".card-content").textContent;
+      newB.push(text);
+    });
+    
+    itemsB = newB;
+    setComponentValue({ items_a: itemsA, items_b: itemsB });
+  }
+  
+  // Event Delegation for hover correlation
+  const listA = document.getElementById("list-a");
+  const listB = document.getElementById("list-b");
+  
+  listA.addEventListener("mouseover", (e) => {
+    const card = e.target.closest(".column-card");
+    if (!card) return;
+    const idx = Array.from(listA.children).indexOf(card);
+    if (idx !== -1) highlightRow(idx, true);
+  });
+  
+  listA.addEventListener("mouseout", (e) => {
+    const card = e.target.closest(".column-card");
+    if (!card) return;
+    const idx = Array.from(listA.children).indexOf(card);
+    if (idx !== -1) highlightRow(idx, false);
+  });
+  
+  listB.addEventListener("mouseover", (e) => {
+    const card = e.target.closest(".column-card");
+    if (!card) return;
+    const idx = Array.from(listB.children).indexOf(card);
+    if (idx !== -1) highlightRow(idx, true);
+  });
+  
+  listB.addEventListener("mouseout", (e) => {
+    const card = e.target.closest(".column-card");
+    if (!card) return;
+    const idx = Array.from(listB.children).indexOf(card);
+    if (idx !== -1) highlightRow(idx, false);
+  });
+  
+  function applyTheme(theme) {
+    if (!theme) return;
+    const root = document.documentElement;
+    root.style.setProperty('--primary', theme.primaryColor || '#1a3a6e');
+    root.style.setProperty('--bg', theme.backgroundColor || '#ffffff');
+    root.style.setProperty('--sec-bg', theme.secondaryBackgroundColor || '#f0f2f6');
+    root.style.setProperty('--text', theme.textColor || '#31333f');
+    
+    const isDark = luminance(theme.backgroundColor || '#ffffff') < 0.5;
+    if (isDark) {
+      root.style.setProperty('--border', 'rgba(255, 255, 255, 0.12)');
+      root.style.setProperty('--card-bg', 'rgba(255, 255, 255, 0.04)');
+      root.style.setProperty('--card-hover-bg', 'rgba(255, 255, 255, 0.08)');
+      root.style.setProperty('--card-active-bg', 'rgba(26, 58, 110, 0.4)');
+      root.style.setProperty('--shadow', 'rgba(0, 0, 0, 0.4)');
+      root.style.setProperty('--connector-color', 'rgba(255, 255, 255, 0.15)');
+      root.style.setProperty('--connector-active', theme.primaryColor || '#60a5fa');
+    } else {
+      root.style.setProperty('--border', '#e0e0e0');
+      root.style.setProperty('--card-bg', '#ffffff');
+      root.style.setProperty('--card-hover-bg', '#f8fafd');
+      root.style.setProperty('--card-active-bg', '#e8f0fe');
+      root.style.setProperty('--shadow', 'rgba(0, 0, 0, 0.04)');
+      root.style.setProperty('--connector-color', '#cbd5e1');
+      root.style.setProperty('--connector-active', theme.primaryColor || '#1a3a6e');
+    }
+  }
+  
+  function luminance(hex) {
+    let c = hex.replace("#","");
+    if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+    const r = parseInt(c.substr(0,2),16)/255;
+    const g = parseInt(c.substr(2,2),16)/255;
+    const b = parseInt(c.substr(4,2),16)/255;
+    return 0.2126*r + 0.7152*g + 0.0722*b;
+  }
+  
+  window.addEventListener("message", function(ev) {
+    const d = ev.data;
+    if (!d || typeof d.type !== "string") return;
+    
+    if (d.type === "streamlit:render") {
+      if (!themeApplied) {
+        applyTheme(d.theme);
+        themeApplied = true;
+      }
+      render(d.args || {});
+    }
+  });
+  
+  toParent({ type: "streamlit:componentReady", apiVersion: 1 });
+</script>
+</body>
+</html>
